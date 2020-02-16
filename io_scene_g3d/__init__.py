@@ -70,7 +70,7 @@ def register():
 def unregister():
     from bpy.utils import unregister_class
     for cls in classes:
-        register_class(cls)
+        unregister_class(cls)
   
 if __name__ == "__main__":
     register()
