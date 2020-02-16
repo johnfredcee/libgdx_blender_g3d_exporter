@@ -26,13 +26,13 @@ if "bpy" in locals():
         importlib.reload(io_scene_g3d.g3d_exporter)
 
 import bpy
-from .g3d_exporter import G3DJExporterOperator, G3DBExporterOperator
+from .g3d_exporter import G3DJ_OT_ExporterOperator, G3DB_OT_ExporterOperator
 
 bl_info = {
     "name": "LibGDX G3D Exporter",
     "author": "Danilo Costa Viana",
     "version": (0, 2, 7),
-    "blender": (2, 76, 0),
+    "blender": (2, 81, 0),
     "location": "File > Import-Export",
     "description": "Export scene to LibGDX format",
     "tracker_url": "https://github.com/Dancovich/libgdx_blender_g3d_exporter/issues",
@@ -56,18 +56,21 @@ class Mesh(object):
 
 
 def menu_func(self, context):
-    self.layout.operator(G3DJExporterOperator.bl_idname, text="LibGDX G3D text format (.g3dj)")
-    self.layout.operator(G3DBExporterOperator.bl_idname, text="LibGDX G3D binary format (.g3db)")
+    self.layout.operator(G3DJ_OT_ExporterOperator.bl_idname, text="LibGDX G3D text format (.g3dj)")
+    self.layout.operator(G3DB_OT_ExporterOperator.bl_idname, text="LibGDX G3D binary format (.g3db)")
 
+classes = ( G3DJ_OT_ExporterOperator, G3DB_OT_ExporterOperator )
 
 def register():
-    bpy.utils.register_module(__name__)
-    bpy.types.INFO_MT_file_export.append(menu_func)
-
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+  
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
-    bpy.types.INFO_MT_file_export.remove(menu_func)
-
+    from bpy.utils import unregister_class
+    for cls in classes:
+        register_class(cls)
+  
 if __name__ == "__main__":
     register()

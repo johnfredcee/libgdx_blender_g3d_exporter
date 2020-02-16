@@ -21,7 +21,7 @@
 import bpy
 import mathutils
 from bpy.props import BoolProperty, IntProperty
-from bpy_extras.io_utils import ExportHelper, orientation_helper_factory, path_reference
+from bpy_extras.io_utils import ExportHelper, orientation_helper, path_reference
 
 from io_scene_g3d import g3d_file_writer
 from .profile import profile, print_stats
@@ -42,10 +42,8 @@ from .domain_classes import (Texture,
                              G3DModel)
 from io_scene_g3d.util import FLOAT_ROUND
 
-IOG3DOrientationHelper = orientation_helper_factory("IOG3DOrientationHelper", axis_forward='-Z', axis_up='Y')
-
-
-class G3DBaseExporterOperator(ExportHelper, IOG3DOrientationHelper):
+@orientation_helper(axis_forward='-Z', axis_up='Y')
+class G3DBaseExporterOperator(ExportHelper):
     # This is our model
     g3dModel = None
 
@@ -1240,7 +1238,7 @@ class G3DBaseExporterOperator(ExportHelper, IOG3DOrientationHelper):
                 self.vector4AxisMapper["y"]["sign"] = 1.0
 
 
-class G3DBExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
+class G3DB_OT_ExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
     bl_idname = "export_json_g3d.g3db"
     bl_label = "G3DB Exporter"
     bl_options = {'PRESET'}
@@ -1266,7 +1264,7 @@ class G3DBExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
     ]
 
 
-class G3DJExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
+class G3DJ_OT_ExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
     bl_idname = "export_json_g3d.g3dj"
     bl_label = "G3DJ Exporter"
     bl_options = {'PRESET'}
