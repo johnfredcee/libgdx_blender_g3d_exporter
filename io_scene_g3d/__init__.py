@@ -32,12 +32,13 @@ bl_info = {
     "name": "LibGDX G3D Exporter",
     "author": "Danilo Costa Viana",
     "version": (0, 2, 7),
-    "blender": (2, 76, 0),
+    "blender": (2, 83, 0),
     "location": "File > Import-Export",
     "description": "Export scene to LibGDX format",
     "tracker_url": "https://github.com/Dancovich/libgdx_blender_g3d_exporter/issues",
     "wiki_url": "https://github.com/Dancovich/libgdx_blender_g3d_exporter/wiki",
-    "category": "Import-Export"}
+    "category": "Import-Export"
+}
 
 try:
     import pydevd
@@ -54,6 +55,10 @@ class Mesh(object):
     def __repr__(self):
         return '<Mesh(%s)>' % self.s
 
+classes = (
+	G3DJExporterOperator,
+	G3DBExporterOperator
+)
 
 def menu_func(self, context):
     self.layout.operator(G3DJExporterOperator.bl_idname, text="LibGDX G3D text format (.g3dj)")
@@ -61,13 +66,17 @@ def menu_func(self, context):
 
 
 def register():
-    bpy.utils.register_module(__name__)
-    bpy.types.INFO_MT_file_export.append(menu_func)
+	from bpy.utils import register_class
+	for c in classes:
+		register_class(c)
+	bpy.types.TOPBAR_MT_file_export.append(menu_func)
 
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
-    bpy.types.INFO_MT_file_export.remove(menu_func)
+	from bpy.utils import register_class
+	for c in classes:
+		register_class(c)
+	bpy.types.TOPBAR_MT_file_export.append(menu_func)
 
 if __name__ == "__main__":
     register()
