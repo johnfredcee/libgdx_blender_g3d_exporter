@@ -31,7 +31,7 @@ from .g3d_exporter import G3DJExporterOperator, G3DBExporterOperator
 bl_info = {
     "name": "LibGDX G3D Exporter",
     "author": "Danilo Costa Viana",
-    "version": (0, 2, 7),
+    "version": (0, 2, 8),
     "blender": (2, 83, 0),
     "location": "File > Import-Export",
     "description": "Export scene to LibGDX format",
