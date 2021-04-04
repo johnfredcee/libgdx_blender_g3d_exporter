@@ -38,7 +38,7 @@ Any *.g3dj/.g3db* files exported by this script are considered program output an
 ### Changes
 
 * **0.2.8**
-    Mesh export rewritten for blender 2.83. Exports a simple test cube
+  - Mesh export rewritten for blender 2.83. Exports a simple test cube
 * **0.2.7**
   - Fixed bug where having multiple objects use the same mesh data on Blender would result in multiple meshes being exported
 
