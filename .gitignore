@@ -4,3 +4,5 @@
 /.settings
 .vscode/settings.json
 libgdx_blender_g3d_exporter.code-workspace
+autocomplete/
+exports/
