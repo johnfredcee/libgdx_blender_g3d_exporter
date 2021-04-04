@@ -73,10 +73,10 @@ def register():
 
 
 def unregister():
-	from bpy.utils import register_class
+	from bpy.utils import unregister_class
 	for c in classes:
-		register_class(c)
-	bpy.types.TOPBAR_MT_file_export.append(menu_func)
+		unregister_class(c)
+	bpy.types.TOPBAR_MT_file_export.remove(menu_func)
 
 if __name__ == "__main__":
     register()

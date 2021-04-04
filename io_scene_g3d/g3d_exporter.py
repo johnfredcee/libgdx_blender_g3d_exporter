@@ -21,8 +21,8 @@
 import bpy
 import mathutils
 from bpy.props import BoolProperty, IntProperty
+from bpy_extras import node_shader_utils
 from bpy_extras.io_utils import ExportHelper, orientation_helper, path_reference
-
 from io_scene_g3d import g3d_file_writer
 from .profile import profile, print_stats
 from . import util
@@ -49,43 +49,43 @@ class G3DBaseExporterOperator(ExportHelper):
 
     filename_ext = ""
 
-    useSelection = BoolProperty(
+    useSelection : BoolProperty(
         name="Selection Only",
         description="Export only selected objects",
         default=False
     )
-    
-    applyModifiers = BoolProperty(
+
+    applyModifiers : BoolProperty(
         name="Apply Modifiers",
         description="Apply modifiers to each mesh before exporting, doesn't affect original meshes",
         default=True
     )
 
-    exportArmature = BoolProperty(
+    exportArmature : BoolProperty(
         name="Export Armatures",
         description="Export armature nodes (bones)",
         default=True
     )
 
-    bonesPerVertex = IntProperty(
+    bonesPerVertex : IntProperty(
         name="Bone Weights per Vertex",
         description="Maximum number of BLENDWEIGHT attributes per vertex. LibGDX default is 4.",
         default=4,
         soft_min=1, soft_max=8
     )
 
-    exportAnimation = BoolProperty(
+    exportAnimation : BoolProperty(
         name="Export Actions as Animations",
         description="Export bone actions as animations",
         default=True,
     )
 
-    generateTangentBinormal = BoolProperty(
+    generateTangentBinormal : BoolProperty(
         name="Calculate Tangent and Binormal Vectors",
         description="Calculate and export tangent and binormal vectors for normal mapping. Requires UV mapping the mesh.",
         default=False
     )
-    
+
     # This is overriden by the G3DB subclass of this exporter. For the G3DJ this isn't
     # used and is here with it's default value to pass to methods.
     oldFormatJson = True
@@ -128,7 +128,7 @@ class G3DBaseExporterOperator(ExportHelper):
 
         # Initialize our model
         self.g3dModel = G3DModel()
-        
+
         # Generate the mesh list of the model
         meshes = self.generateMeshes(context)
         if meshes is not None:
@@ -197,7 +197,10 @@ class G3DBaseExporterOperator(ExportHelper):
             # Clone mesh to a temporary object. Wel'll apply modifiers and triangulate the
             # clone before exporting.
             currentObjNode = currentObjNode.copy()
-            currentBlMesh = currentObjNode.to_mesh(context.scene, self.applyModifiers, 'PREVIEW', calc_tessface=False)
+            depsgraph = context.evaluated_depsgraph_get()
+            object_eval = currentObjNode.evaluated_get(depsgraph)
+            currentBlMesh = bpy.data.meshes.new_from_object(object_eval)
+            # currentBlMesh = currentObjNode.to_mesh()
             self.meshTriangulate(currentBlMesh)
             currentObjNode.data = currentBlMesh
 
@@ -210,9 +213,7 @@ class G3DBaseExporterOperator(ExportHelper):
                 continue
 
             for blMaterialIndex in range(0, len(currentBlMesh.materials)):
-                if currentBlMesh.materials[blMaterialIndex] is None or currentBlMesh.materials[blMaterialIndex].type != 'SURFACE':
-                    Util.debug("Ignoring mesh part for material '{!s}', type is not SURFACE (is {!s})", currentBlMesh.materials[blMaterialIndex].name, currentBlMesh.materials[blMaterialIndex].type)
-                else:
+                if currentBlMesh.materials[blMaterialIndex] is None:
                     Util.debug("Processing mesh part for material '{!s}'", currentBlMesh.materials[blMaterialIndex].name)
 
                 # Fills the part here
@@ -417,8 +418,8 @@ class G3DBaseExporterOperator(ExportHelper):
             atLeastOneMaterial = False
 
             for blMaterial in bpy.data.materials:
-                if blMaterial is None or blMaterial.type != 'SURFACE':
-                    Util.debug("Ignoring material '{!s}', type is not SURFACE ({!s})", blMaterial.name, blMaterial.type)
+                if blMaterial is None:
+                    # Util.debug("Ignoring material '{!s}', type is not SURFACE ({!s})", blMaterial.name, blMaterial.type)
                     continue
 
                 # If none of the objects in the scene use the material we don't export it
@@ -426,122 +427,83 @@ class G3DBaseExporterOperator(ExportHelper):
                 for currentObjNode in bpy.data.objects:
                     if currentObjNode.type != 'MESH' or (self.useSelection and not currentObjNode.select):
                         continue
-
                     currentMesh = currentObjNode.data
                     if currentMesh is not None and len(currentMesh.materials) > 0:
                         for searchMaterial in currentMesh.materials:
                             if searchMaterial.name == blMaterial.name:
                                 materialIsUsed = True
                                 break
-
                     if materialIsUsed:
                         break
-
                 # We didn't find an object that uses this material. Ignoring
                 if not materialIsUsed:
                     Util.debug("Ignoring unused material '{!s}'", blMaterial.name)
                     continue
-
                 Util.debug("Exporting material '{!s}'", blMaterial.name)
                 currentMaterial = Material()
                 currentMaterial.id = blMaterial.name
-
-                # We select some optional arguments that depend on the shading algorithm
+                blm_wrap = node_shader_utils.PrincipledBSDFWrapper(blMaterial, is_readonly=True)
+                # we default to phong because those are the paramters we have now
                 specularType = "Phong"
-                if blMaterial.specular_shader not in {'COOKTORR', 'PHONG', 'BLINN'}:
-                    specularType = "Lambert"
-
                 # Ambient color is taken from world
                 ambientColor = [0.0, 0.0, 0.0]
                 if context is not None and context.scene is not None and context.scene.world is not None:
-                    worldAmbientColor = context.scene.world.ambient_color
+                    worldAmbientColor = context.scene.world.color
                     if worldAmbientColor is not None and len(worldAmbientColor) >= 3:
                         ambientColor = list(worldAmbientColor)
-                currentMaterial.ambient = ambientColor
-
-                currentMaterial.diffuse = [blMaterial.diffuse_color[0] * blMaterial.diffuse_intensity, \
-                                           blMaterial.diffuse_color[1] * blMaterial.diffuse_intensity, \
-                                           blMaterial.diffuse_color[2] * blMaterial.diffuse_intensity]
-
-                currentMaterial.specular = [blMaterial.specular_color[0] * blMaterial.specular_intensity \
-                                            , blMaterial.specular_color[1] * blMaterial.specular_intensity \
-                                            , blMaterial.specular_color[2] * blMaterial.specular_intensity \
-                                            , blMaterial.specular_alpha]
-
-                currentMaterial.emissive = [blMaterial.diffuse_color[0], blMaterial.diffuse_color[1], blMaterial.diffuse_color[2]]
-
+                currentMaterial.ambient = [ ambientColor[0], ambientColor[1], ambientColor[2], 0.0 ]
+                currentMaterial.diffuse = [blm_wrap.base_color[0], \
+                                           blm_wrap.base_color[1], \
+                                           blm_wrap.base_color[2],
+                                           blm_wrap.alpha]
+                currentMaterial.specular = [blm_wrap.base_color[0]  \
+                                            , blm_wrap.base_color[1] \
+                                            , blm_wrap.base_color[2] \
+                                            , blm_wrap.alpha]
+                currentMaterial.emissive = [blm_wrap.emission_color[0], blm_wrap.emission_color[1], blm_wrap.emission_color[2]]
                 # This is taken from Blender's FBX exporter, LibGDX fbx-conv tool seems to take from same place.
-                if specularType == "Phong":
-                    currentMaterial.shininess = (blMaterial.specular_hardness - 1.0) / 5.10
-                else:
-                    # Assumes Blender default specular hardness of 50
-                    currentMaterial.shininess = 49.0 / 5.10
-
-                currentMaterial.reflection = list(blMaterial.mirror_color)
-
-                if blMaterial.use_transparency:
-                    currentMaterial.opacity = blMaterial.alpha
-
-                if len(blMaterial.texture_slots) > 0:
-
-                    materialTextures = []
-
-                    for slot in blMaterial.texture_slots:
-                        currentTexture = Texture()
-
-                        if slot is not None:
-                            Util.debug("Found texture {!s}. Texture coords are {!s}, texture type is {!s}", slot.name, slot.texture_coords, slot.texture.type)
-
-                        if (slot is None or slot.texture_coords != 'UV' or slot.texture.type != 'IMAGE' or slot.texture.__class__ is not bpy.types.ImageTexture):
-                            if slot is not None:
-                                Util.warn("Texture type {!s} not supported, skipping", slot.texture.type)
-                            continue
-
-                        currentTexture.id = slot.name
-                        currentTexture.filename = (self.getCompatiblePath(slot.texture.image.filepath))
-
-                        usageType = ""
-
-                        if slot.use_map_color_diffuse:
-                            usageType = "DIFFUSE"
-                        elif slot.use_map_normal and slot.texture.use_normal_map:
-                            usageType = "NORMAL"
-                        elif slot.use_map_normal and not slot.texture.use_normal_map:
-                            usageType = "BUMP"
-                        elif slot.use_map_ambient:
-                            usageType = "AMBIENT"
-                        elif slot.use_map_emit:
-                            usageType = "EMISSIVE"
-                        elif slot.use_map_diffuse:
-                            usageType = "REFLECTION"
-                        elif slot.use_map_alpha:
-                            usageType = "TRANSPARENCY"
-                        elif slot.use_map_color_spec:
-                            usageType = "SPECULAR"
-                        elif slot.use_map_specular:
-                            usageType = "SHININESS"
-                        else:
-                            usageType = "UNKNOWN"
-
-                        currentTexture.type = usageType
-
-                        # Ending current texture
-                        materialTextures.append(currentTexture)
-
-                    # Adding found textures to this material
-                    currentMaterial.textures = materialTextures
-
+                currentMaterial.shininess = (1.0 - blm_wrap.roughness)
+                currentMaterial.reflection = [ blm_wrap.base_color[0], blm_wrap.base_color[1], blm_wrap.base_color[2], blm_wrap.alpha ]
+                currentMaterial.opacity =blm_wrap.alpha
+                image_map = {
+                    "base_color_texture": "DIFFUSE",
+                    "specular_texture": "SPECULAR",
+                    "normalmap_texture" : "NORMAL",
+                    "alpha_texture" : "TRANSPARENCY",
+                    "emission_color_texture" : "EMISSIVE"
+                    # also to consider - roughness_texture, metallic_texture, 
+                }
+                materialTextures = []
+                for(key, usage_type) in sorted(image_map.items()):
+                    tex_wrap = getattr(blm_wrap, key, None)
+                    if tex_wrap is None:
+                        continue
+                    if (tex_wrap.texcoords != 'UV'):
+                        Util.warn("Texture type {!s} not supported, skipping", tex_wrap.texcoords)
+                        continue
+                    image = tex_wrap.image
+                    if image is None:
+                        Util.warn("Texture has no image, skipping")
+                        continue
+                    #filepath = io_utils.path_reference(image.filepath)
+                    Util.debug("Found texture {!s}. Texture coords are {!s}, texture type is {!s}", key, tex_wrap.texcoords, usage_type)
+                    currentTexture = Texture()
+                    currentTexture.id = key
+                    currentTexture.filename = (self.getCompatiblePath(image.filepath))
+                    currentTexture.type = usage_type
+                    # Ending current texture
+                    materialTextures.append(currentTexture)
+                # Adding found textures to this material
+                currentMaterial.textures = materialTextures
                 # Adding this material to the full list
                 atLeastOneMaterial = True
                 generatedMaterials.append(currentMaterial)
-
             # If all materials where None (unassigned material slots) then we actually didn't export materials and
             # we need to raise an exception
             if not atLeastOneMaterial:
                 raise RuntimeError("Can't have a model without materials, use at least one material in your mesh objects.")
         else:
             raise RuntimeError("Can't have a model without materials, use at least one material in your mesh objects.")
-
         return generatedMaterials
 
     @profile('generateNodes')
@@ -644,12 +606,14 @@ class G3DBaseExporterOperator(ExportHelper):
                 if currentBlMesh.materials is None:
                     Util.warn("Ignored mesh %r, no materials found" % currentBlMesh)
                     continue
-                
+
                 # We apply the mesh modifiers to a cloned mesh. Modifiers that duplicate
                 # vertices (like Mirror modifier) need this so when we scan vertex groups these
                 # vertices are considered real and we know which vertex groups they are weighted to
                 clonedAppliedModifiersNode = blNode.copy()
-                clonedAppliedModifiersMesh = clonedAppliedModifiersNode.to_mesh(context.scene, self.applyModifiers, 'PREVIEW', calc_tessface=False)
+                depsgraph = context.evaluated_depsgraph_get()
+                object_eval = blNode.evaluated_get(depsgraph)
+                clonedAppliedModifiersMesh = bpy.data.meshes.new_from_object(object_eval)
                 self.meshTriangulate(clonedAppliedModifiersMesh)
                 clonedAppliedModifiersNode.data = clonedAppliedModifiersMesh
 
@@ -666,19 +630,26 @@ class G3DBaseExporterOperator(ExportHelper):
                     nodePart.materialId = currentBlMaterial.name
 
                     # Maps material textures to the TEXCOORD attributes
-                    for uvIndex in range(len(currentBlMesh.uv_layers)):
-                        blUvLayer = currentBlMesh.uv_layers[uvIndex]
-                        currentTexCoord = []
-
-                        for texIndex in range(len(currentBlMaterial.texture_slots)):
-                            blTexSlot = currentBlMaterial.texture_slots[texIndex]
-
-                            if (blTexSlot is None or blTexSlot.texture_coords != 'UV' or blTexSlot.texture.type != 'IMAGE' or blTexSlot.texture.__class__ is not bpy.types.ImageTexture):
-                                continue
-
-                            if (blTexSlot.uv_layer == blUvLayer.name or (blTexSlot.uv_layer == "" and uvIndex == 0)):
-                                currentTexCoord.append(texIndex)
-
+                    currentTexCoord = []
+                    mat_wrap = node_shader_utils.PrincipledBSDFWrapper(currentBlMaterial, is_readonly=True)
+                    image_map = {
+                        "base_color_texture": "DIFFUSE",
+                        "specular_texture": "SPECULAR",
+                        "normalmap_texture" : "NORMAL",
+                        "alpha_texture" : "TRANSPARENCY",
+                        "emission_color_texture" : "EMISSIVE"
+                        # also to consider - roughness_texture, metallic_texture, 
+                    }
+                    for(key, usage_type) in sorted(image_map.items()):
+                        tex_wrap = getattr(mat_wrap, key, None)
+                        if tex_wrap is None:
+                            continue
+                        if (tex_wrap.texcoords != 'UV'):
+                            Util.warn("Texture type {!s} not supported, skipping", tex_wrap.texcoords)
+                            continue
+                        if (tex_wrap.image is None):
+                            continue
+                        currentTexCoord.append(0)
                         # Adding UV mappings to this node part
                         nodePart.addUVLayer(currentTexCoord)
 
@@ -724,7 +695,7 @@ class G3DBaseExporterOperator(ExportHelper):
 
                     # Adding this node part to the current node
                     currentNode.addPart(nodePart)
-                
+
                 # Clean up cloned meshes
                 bpy.data.objects.remove(clonedAppliedModifiersNode)
                 bpy.data.meshes.remove(clonedAppliedModifiersMesh)
@@ -1244,13 +1215,13 @@ class G3DBExporterOperator(bpy.types.Operator, G3DBaseExporterOperator):
     bl_options = {'PRESET'}
 
     filename_ext = ".g3db"
-    
-    oldFormatJson = BoolProperty(
+
+    oldFormatJson : BoolProperty(
         name="Use Old UBJSON Datatypes",
         description="Use the old UBJSON datatype sizes. LibGDX loads the old format by default.",
         default=True
     )
-    
+
     order = [
         "filepath",
         "check_existing",

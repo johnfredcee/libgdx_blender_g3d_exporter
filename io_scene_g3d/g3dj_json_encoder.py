@@ -307,7 +307,10 @@ def _make_iterencode_g3d(markers, _default, _encoder, _indent, _floatstr,
                 if markerid in markers:
                     raise ValueError("Circular reference detected")
                 markers[markerid] = o
-            o = _default(o)
+            try:
+                o = _default(o)
+            except json.JSONDecodeError as jsonerror:
+                print("Decode failed  ", jsonerror.msg )
             for chunk in _iterencode(o, _current_indent_level):
                 yield chunk
             if markers is not None:
